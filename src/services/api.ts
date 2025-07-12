@@ -34,6 +34,25 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface CreateSwapRequest {
+  requested_from_user_id: string;
+  skill_offered: string;
+  skill_requested: string;
+  message?: string;
+}
+
+export interface Swap {
+  id: string;
+  offered_by_user_id: string;
+  requested_from_user_id: string;
+  skill_offered: string;
+  skill_requested: string;
+  message: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -115,6 +134,31 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
+  }
+
+  async createSwap(token: string, swap: CreateSwapRequest): Promise<{ message: string; swap: Swap }> {
+    const response = await fetch('http://localhost:3001/api/swaps', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(swap),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create swap');
+    return data;
+  }
+
+  async getSwaps(token: string): Promise<{ swaps: Swap[] }> {
+    const response = await fetch('http://localhost:3001/api/swaps', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to fetch swaps');
+    return data;
   }
 }
 

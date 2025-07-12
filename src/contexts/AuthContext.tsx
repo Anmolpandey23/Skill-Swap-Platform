@@ -142,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           password,
           user_metadata: {
             name,
-            joinedAt: new Date().toISOString().split('T')[0],
+            joinedAt: new Date().toISOString().split('T')[0], // or new Date().toISOString()
             role: 'user',
             isPublic: true,
           },

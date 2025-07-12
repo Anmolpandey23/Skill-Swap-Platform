@@ -54,3 +54,15 @@ export interface AdminStats {
   completedSwaps: number;
   averageRating: number;
 }
+
+export interface Swap {
+  id: string;
+  offered_by_user_id: string;
+  requested_from_user_id: string;
+  skill_offered: string;
+  skill_requested: string;
+  message: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}

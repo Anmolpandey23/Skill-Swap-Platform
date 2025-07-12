@@ -1,23 +1,44 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Send, Inbox, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
 import { SwapRequestCard } from './SwapRequestCard';
-import { mockSwapRequests } from '../../data/mockData';
-import { User, SwapRequest } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiService, Swap } from '../../services/api';
 
-interface SwapsPageProps {
-  currentUser: User;
-}
-
-export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
+export const SwapsPage: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [swaps, setSwaps] = useState<Swap[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { receivedRequests, sentRequests } = useMemo(() => {
-    const received = mockSwapRequests.filter(request => request.toUserId === currentUser.id);
-    const sent = mockSwapRequests.filter(request => request.fromUserId === currentUser.id);
-    
-    return { receivedRequests: received, sentRequests: sent };
-  }, [currentUser.id]);
+  useEffect(() => {
+    const fetchSwaps = async () => {
+      if (!user) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) throw new Error('Not authenticated');
+        const { swaps } = await apiService.getSwaps(token);
+        setSwaps(swaps);
+      } catch (err: any) {
+        setError(err.message || 'Failed to fetch swaps');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSwaps();
+  }, [user]);
+
+  const receivedRequests = useMemo(() =>
+    swaps.filter(s => s.requested_from_user_id === user?.id),
+    [swaps, user]
+  );
+  const sentRequests = useMemo(() =>
+    swaps.filter(s => s.offered_by_user_id === user?.id),
+    [swaps, user]
+  );
 
   const filteredRequests = useMemo(() => {
     const requests = activeTab === 'received' ? receivedRequests : sentRequests;
@@ -25,7 +46,7 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
     return requests.filter(request => request.status === statusFilter);
   }, [activeTab, receivedRequests, sentRequests, statusFilter]);
 
-  const getStatusIcon = (status: SwapRequest['status']) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
         return <Clock className="w-4 h-4 text-yellow-500" />;
@@ -42,7 +63,7 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
     }
   };
 
-  const getStatusCounts = (requests: SwapRequest[]) => {
+  const getStatusCounts = (requests: Swap[]) => {
     return {
       pending: requests.filter(r => r.status === 'pending').length,
       accepted: requests.filter(r => r.status === 'accepted').length,
@@ -76,7 +97,6 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
               </div>
             </div>
           </div>
-          
           <div className="bg-white rounded-lg p-6 border border-gray-200">
             <div className="flex items-center">
               <CheckCircle className="w-8 h-8 text-green-500" />
@@ -88,7 +108,6 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
               </div>
             </div>
           </div>
-          
           <div className="bg-white rounded-lg p-6 border border-gray-200">
             <div className="flex items-center">
               <CheckCircle className="w-8 h-8 text-blue-500" />
@@ -100,7 +119,6 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
               </div>
             </div>
           </div>
-          
           <div className="bg-white rounded-lg p-6 border border-gray-200">
             <div className="flex items-center">
               <XCircle className="w-8 h-8 text-red-500" />
@@ -162,14 +180,18 @@ export const SwapsPage: React.FC<SwapsPageProps> = ({ currentUser }) => {
 
           {/* Request List */}
           <div className="p-6">
-            {filteredRequests.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-12 text-gray-500">Loading swaps...</div>
+            ) : error ? (
+              <div className="text-center py-12 text-red-500">{error}</div>
+            ) : filteredRequests.length > 0 ? (
               <div className="space-y-4">
                 {filteredRequests.map((request) => (
                   <SwapRequestCard
                     key={request.id}
                     request={request}
                     isReceived={activeTab === 'received'}
-                    currentUser={currentUser}
+                    currentUser={user!}
                   />
                 ))}
               </div>
