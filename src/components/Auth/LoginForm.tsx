@@ -10,34 +10,26 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, loading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
+    
     try {
       const success = await login(email, password);
       if (!success) {
-        setError('Invalid email or password');
+        // Error is already set in the context
+        console.log('Login failed');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
+      console.error('Login error:', err);
     }
   };
 
-  const fillDemoCredentials = (role: 'user' | 'admin') => {
-    if (role === 'admin') {
-      setEmail('admin@skillswap.com');
-    } else {
-      setEmail('alex@example.com');
-    }
-    setPassword('password');
+  const fillDemoCredentials = () => {
+    // Use a real email that works with your backend
+    setEmail('testuser123@gmail.com');
+    setPassword('testpassword123');
   };
 
   return (
@@ -104,29 +96,23 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={loading}
               className="w-full bg-gradient-to-r from-blue-500 to-teal-500 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200">
             <div className="text-center text-sm text-gray-600 mb-4">
-              Demo Accounts:
+              Demo Account:
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => fillDemoCredentials('user')}
-                className="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                onClick={fillDemoCredentials}
+                className="w-full px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
               >
-                User Demo
-              </button>
-              <button
-                onClick={() => fillDemoCredentials('admin')}
-                className="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Admin Demo
+                Fill Demo Credentials
               </button>
             </div>
           </div>

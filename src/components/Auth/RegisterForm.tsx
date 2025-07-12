@@ -12,37 +12,36 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { register } = useAuth();
+  const [localError, setLocalError] = useState('');
+  const { register, loading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setLocalError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setLocalError('Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setLocalError('Password must be at least 6 characters');
       return;
     }
-
-    setIsLoading(true);
 
     try {
       const success = await register(name, email, password);
       if (!success) {
-        setError('Email already exists');
+        // Error is already set in the context
+        console.log('Registration failed');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
+      console.error('Registration error:', err);
     }
   };
+
+  // Use context error if available, otherwise use local error
+  const displayError = error || localError;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center p-4">
@@ -56,9 +55,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             <p className="text-gray-600 mt-2">Create your account to start swapping skills</p>
           </div>
 
-          {error && (
+          {displayError && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
+              {displayError}
             </div>
           )}
 
@@ -138,10 +137,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={loading}
               className="w-full bg-gradient-to-r from-blue-500 to-teal-500 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 

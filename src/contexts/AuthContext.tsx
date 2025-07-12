@@ -6,6 +6,8 @@ interface AuthContextType extends AuthState {
   register: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (updatedUser: Partial<User>) => void;
+  loading: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,126 +20,220 @@ export const useAuth = () => {
   return context;
 };
 
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    email: 'alex@example.com',
-    location: 'San Francisco, CA',
-    profilePhoto: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150',
-    skillsOffered: ['JavaScript', 'React', 'Node.js'],
-    skillsWanted: ['Python', 'Machine Learning', 'Data Analysis'],
-    availability: ['Weekends', 'Evenings'],
-    isPublic: true,
-    role: 'user',
-    rating: 4.8,
-    reviewCount: 12,
-    joinedAt: '2024-01-15',
-    isActive: true,
-  },
-  {
-    id: '2',
-    name: 'Sarah Chen',
-    email: 'sarah@example.com',
-    location: 'New York, NY',
-    profilePhoto: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=150',
-    skillsOffered: ['Photoshop', 'UI/UX Design', 'Figma'],
-    skillsWanted: ['Photography', 'Video Editing'],
-    availability: ['Weekdays', 'Evenings'],
-    isPublic: true,
-    role: 'user',
-    rating: 4.9,
-    reviewCount: 8,
-    joinedAt: '2024-02-20',
-    isActive: true,
-  },
-  {
-    id: 'admin',
-    name: 'Admin User',
-    email: 'admin@skillswap.com',
-    location: 'Remote',
-    skillsOffered: [],
-    skillsWanted: [],
-    availability: [],
-    isPublic: false,
-    role: 'admin',
-    rating: 0,
-    reviewCount: 0,
-    joinedAt: '2024-01-01',
-    isActive: true,
-  },
-];
+// Backend API configuration
+const API_BASE_URL = 'http://localhost:3001/api/auth';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      setAuthState({
-        user: JSON.parse(savedUser),
-        isAuthenticated: true,
-      });
-    }
+    // Check for existing session on app load
+    checkAuthStatus();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Mock authentication
-    const user = mockUsers.find(u => u.email === email);
-    if (user && password === 'password') {
-      setAuthState({ user, isAuthenticated: true });
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      return true;
+  const checkAuthStatus = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_BASE_URL}/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const user = transformSupabaseUser(data.user);
+          setAuthState({ user, isAuthenticated: true });
+        } else {
+          // Token is invalid, clear it
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      } finally {
+        setLoading(false);
+      }
     }
-    return false;
+  };
+
+  const transformSupabaseUser = (supabaseUser: any): User => {
+    return {
+      id: supabaseUser.id,
+      name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+      email: supabaseUser.email,
+      location: supabaseUser.user_metadata?.location || '',
+      profilePhoto: supabaseUser.user_metadata?.profilePhoto || '',
+      skillsOffered: supabaseUser.user_metadata?.skillsOffered || [],
+      skillsWanted: supabaseUser.user_metadata?.skillsWanted || [],
+      availability: supabaseUser.user_metadata?.availability || [],
+      isPublic: supabaseUser.user_metadata?.isPublic !== false,
+      role: supabaseUser.user_metadata?.role || 'user',
+      rating: supabaseUser.user_metadata?.rating || 0,
+      reviewCount: supabaseUser.user_metadata?.reviewCount || 0,
+      joinedAt: supabaseUser.user_metadata?.joinedAt || new Date().toISOString().split('T')[0],
+      isActive: true,
+    };
+  };
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE_URL}/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const user = transformSupabaseUser(data.user);
+        setAuthState({ user, isAuthenticated: true });
+        
+        // Store tokens
+        if (data.session?.access_token) {
+          localStorage.setItem('accessToken', data.session.access_token);
+        }
+        if (data.session?.refresh_token) {
+          localStorage.setItem('refreshToken', data.session.refresh_token);
+        }
+        
+        return true;
+      } else {
+        setError(data.error || 'Login failed');
+        return false;
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Network error. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const register = async (name: string, email: string, password: string): Promise<boolean> => {
-    const existingUser = mockUsers.find(u => u.email === email);
-    if (existingUser) {
-      return false;
-    }
+    try {
+      setLoading(true);
+      setError(null);
 
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      skillsOffered: [],
-      skillsWanted: [],
-      availability: [],
-      isPublic: true,
-      role: 'user',
-      rating: 0,
-      reviewCount: 0,
-      joinedAt: new Date().toISOString().split('T')[0],
-      isActive: true,
-    };
+      const response = await fetch(`${API_BASE_URL}/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          user_metadata: {
+            name,
+            joinedAt: new Date().toISOString().split('T')[0],
+            role: 'user',
+            isPublic: true,
+          },
+        }),
+      });
 
-    mockUsers.push(newUser);
-    setAuthState({ user: newUser, isAuthenticated: true });
-    localStorage.setItem('currentUser', JSON.stringify(newUser));
-    return true;
-  };
+      const data = await response.json();
 
-  const logout = () => {
-    setAuthState({ user: null, isAuthenticated: false });
-    localStorage.removeItem('currentUser');
-  };
-
-  const updateUser = (updatedUser: Partial<User>) => {
-    if (authState.user) {
-      const updated = { ...authState.user, ...updatedUser };
-      setAuthState({ ...authState, user: updated });
-      localStorage.setItem('currentUser', JSON.stringify(updated));
-      
-      // Update in mock data
-      const userIndex = mockUsers.findIndex(u => u.id === updated.id);
-      if (userIndex !== -1) {
-        mockUsers[userIndex] = updated;
+      if (response.ok) {
+        const user = transformSupabaseUser(data.user);
+        setAuthState({ user, isAuthenticated: true });
+        
+        // Store tokens if session is available
+        if (data.session?.access_token) {
+          localStorage.setItem('accessToken', data.session.access_token);
+        }
+        if (data.session?.refresh_token) {
+          localStorage.setItem('refreshToken', data.session.refresh_token);
+        }
+        
+        return true;
+      } else {
+        setError(data.error || 'Registration failed');
+        return false;
       }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError('Network error. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        await fetch(`${API_BASE_URL}/signout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setAuthState({ user: null, isAuthenticated: false });
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setError(null);
+    }
+  };
+
+  const updateUser = async (updatedUser: Partial<User>) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setError('No authentication token found');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_metadata: updatedUser,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const user = transformSupabaseUser(data.user);
+        setAuthState({ ...authState, user });
+      } else {
+        setError(data.error || 'Profile update failed');
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -149,6 +245,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         updateUser,
+        loading,
+        error,
       }}
     >
       {children}
